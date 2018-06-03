@@ -33,6 +33,17 @@
                     <li><a asp-area="" asp-controller="Home" asp-action="Index">Home</a></li>
                     <li><a asp-area="" asp-controller="Home" asp-action="About">About</a></li>
                     <li><a asp-area="" asp-controller="Home" asp-action="Contact">Contact</a></li>
+                    @{
+                        if (User.Identity.IsAuthenticated)
+                        {
+                            <li><a asp-area="" asp-controller="Logins" asp-action="Logout">Logout</a></li>
+                        }
+                        else
+                        {
+                            <li><a asp-area="" asp-controller="Logins" asp-action="Index">Login</a></li>
+                            <li><a asp-area="" asp-controller="Logins" asp-action="Create">Signup</a></li>
+                        }
+                    }
                 </ul>
             </div>
         </div>
