@@ -1,10 +1,13 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore.Internal;
 using PersonalPhotos.Interfaces;
 using PersonalPhotos.ViewModels;
 
@@ -50,7 +53,8 @@ namespace PersonalPhotos.Controllers
             var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, model.RememberMe, false);
             if (!result.Succeeded)
             {
-                if (result == Microsoft.AspNetCore.Identity.SignInResult.TwoFactorRequired) {
+                if (result == Microsoft.AspNetCore.Identity.SignInResult.TwoFactorRequired)
+                {
                     return RedirectToAction("MfaLogin");
                 }
                 ModelState.AddModelError(string.Empty, "Username and/or Password are incorrect.");
@@ -112,10 +116,10 @@ namespace PersonalPhotos.Controllers
             //await _userManager.AddToRolesAsync(user, new[] {"Editor","Creator"});
 
             var token = _userManager.GenerateEmailConfirmationTokenAsync(user);
-            string scheme = Url.ActionContext.HttpContext.Request.Scheme;
+            var scheme = Url.ActionContext.HttpContext.Request.Scheme;
             var url = Url.Action("Confirmation", "Logins", new { id = user.Id, token = token.Result }, scheme);
             var emailBody = $"Please, confirm your email by clicking on the link below<br>{url}";
-            var subject = "Please, confirm your email address!";
+            const string subject = "Please, confirm your email address!";
             await _email.Send(model.Email, emailBody, subject);
             return RedirectToAction("Index");
         }
@@ -134,7 +138,8 @@ namespace PersonalPhotos.Controllers
             if (confirm.Succeeded)
             {
                 var is2FaEnabled = await _userManager.GetTwoFactorEnabledAsync(user);
-                if (!is2FaEnabled) {
+                if (!is2FaEnabled)
+                {
                     return RedirectToAction("Setup2Fa");
                 }
                 return RedirectToAction("Index");
@@ -260,11 +265,12 @@ namespace PersonalPhotos.Controllers
                 ModelState.AddModelError(string.Empty, "User not found or User is not confirm.");
                 return View(model);
             }
-            var isCodeCorrect = await _userManager.VerifyTwoFactorTokenAsync(user, 
-                _userManager.Options.Tokens.AuthenticatorTokenProvider , model.Code);
-            if (!isCodeCorrect) {
+            var isCodeCorrect = await _userManager.VerifyTwoFactorTokenAsync(user,
+                _userManager.Options.Tokens.AuthenticatorTokenProvider, model.Code);
+            if (!isCodeCorrect)
+            {
                 ModelState.AddModelError(string.Empty, "The code did not match they auth key! Please, try it again");
-                return View(model);               
+                return View(model);
             }
             await _userManager.SetTwoFactorEnabledAsync(user, true);
             return RedirectToAction("Index");
@@ -282,7 +288,7 @@ namespace PersonalPhotos.Controllers
                 ModelState.AddModelError("", "Errors in Page!");
                 return View(model);
             }
-            var result = await _signInManager.TwoFactorSignInAsync(_userManager.Options.Tokens.AuthenticatorTokenProvider, 
+            var result = await _signInManager.TwoFactorSignInAsync(_userManager.Options.Tokens.AuthenticatorTokenProvider,
                 model.Code, true, true);
             if (!result.Succeeded)
             {
@@ -290,6 +296,64 @@ namespace PersonalPhotos.Controllers
                 return View(model);
             }
             return RedirectToAction("Index");
+        }
+
+        [HttpPost]
+        public IActionResult ExternalLogin(string provider, string returnUrl)
+        {
+            var redirectUrl = Url.Action("ExternalLoginCallBack", "Logins", new { returnUrl });
+            var properties = _signInManager.ConfigureExternalAuthenticationProperties(provider, redirectUrl);
+            return Challenge(properties, provider);
+        }
+
+        public async Task<IActionResult> ExternalLoginCallBack(string returnUrl = null, string remoteError = null)
+        {
+            if (!string.IsNullOrEmpty(remoteError))
+            {
+                return RedirectToAction("Index");
+            }
+
+            var info = await _signInManager.GetExternalLoginInfoAsync();
+            if (info == null)
+            {
+                return RedirectToAction("Index");
+            }
+
+            var result = await _signInManager.ExternalLoginSignInAsync(info.LoginProvider, info.ProviderKey, true, true);
+
+            if (result.Succeeded)
+            {
+                return RedirectToAction("Display", "Photos");
+            }
+
+            var emailAddress = info.Principal.FindFirstValue(ClaimTypes.Email);
+            var user = new IdentityUser
+            {
+                Email = emailAddress,
+                UserName = emailAddress,
+                SecurityStamp = new Guid().ToString()
+            };
+            var identityUser = await _userManager.FindByEmailAsync(emailAddress);
+            if (identityUser == null)
+            {
+                await _userManager.CreateAsync(user);
+            }
+
+            var logins = await _userManager.GetLoginsAsync(user);
+            if (logins == null ||
+                !logins.Any(x => x.LoginProvider == info.LoginProvider && x.ProviderKey == info.ProviderKey))
+            {
+                await _userManager.AddLoginAsync(user, info);
+            }
+
+            await _signInManager.SignInAsync(user, true);
+
+            if (!string.IsNullOrEmpty(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction("Display", "Photos");
+
         }
     }
 }

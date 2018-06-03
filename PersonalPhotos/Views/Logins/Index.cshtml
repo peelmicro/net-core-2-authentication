@@ -1,8 +1,12 @@
-﻿@model PersonalPhotos.ViewModels.LoginViewModel
+﻿@using Microsoft.AspNetCore.Identity
+@model PersonalPhotos.ViewModels.LoginViewModel
+@inject SignInManager<IdentityUser> signInManager
 @{
     ViewData["Title"] = "Login";
 }
-
+@{
+    var allProviders = (await signInManager.GetExternalAuthenticationSchemesAsync()).ToList();
+}
 <h2>Login to use your personal photos portal!</h2>
 
 <div class="container">
@@ -29,6 +33,16 @@
                     <a asp-action="ResetPassword" asp-controller="Logins">Reset Password</a>
                 </div>
                 <input type="submit" class="btn btn-default" value="Login!" />
+            </form>
+        </div>
+        <div class="col-md-4">
+            <form method="post" asp-controller="Logins" asp-action="ExternalLogin" class="form-horizontal">
+                @foreach (var provider in allProviders)
+                {
+                    <button type="submit" class="btn btn-default" name="provider" value="@provider.Name" 
+                            title="Login using your @provider.DisplayName" account>@provider.Name</button>
+                }
+
             </form>
         </div>
     </div>
