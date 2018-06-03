@@ -1,5 +1,3 @@
-using System;
-
 namespace PersonalPhotos.ViewModels
 {
   public class ErrorViewModel

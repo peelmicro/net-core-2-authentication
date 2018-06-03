@@ -10,7 +10,6 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using PersonalPhotos.Filters;
 using PersonalPhotos.Interfaces;
 using PersonalPhotos.Models;

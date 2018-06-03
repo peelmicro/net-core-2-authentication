@@ -1,0 +1,23 @@
+@model PersonalPhotos.ViewModels.MfaLoginViewModel
+@{
+    ViewData["Title"] = "Mfa Login";
+}
+
+<h2>Mfa Login</h2>
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-10">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <form method="post" asp-controller="Logins" asp-action="MfaLogin">
+                <div class="form-group">
+                    <label for="code">Enter MFA Code:</label>
+                    <input type="text" id="code" asp-for="Code" class="form-control" />
+                </div>
+                <br/>
+                <input type="submit" class="btn btn-primary" value="Login with MFA" />
+            </form>
+        </div>
+    </div>
+</div>
+

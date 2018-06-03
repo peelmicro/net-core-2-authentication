@@ -1,0 +1,26 @@
+@model PersonalPhotos.ViewModels.MfaCreateViewModel
+@{
+    ViewData["Title"] = "Setup 2FA";
+}
+
+<h2>Setup Two Factor Authentication</h2>
+
+<div class="container">
+    <div class="row">
+        <div class="panel panel-info">
+            <div class="panel-heading">
+                Set up 2FA with Microsfot Authenticator using this code: @Model.FormattedAuthKey
+            </div>
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <form method="post" asp-controller="Logins" asp-action="Setup2Fa">
+                <div class="form-group">
+                    <label for="mfaCode">Code:</label>
+                    <input type="text" id="mfaCode" asp-for="Code" class="form-control" />
+                </div>
+                <br/>
+                <input type="submit" class="btn btn-primary" value="Complete Setup!" />
+            </form>
+        </div>
+    </div>
+</div>
+

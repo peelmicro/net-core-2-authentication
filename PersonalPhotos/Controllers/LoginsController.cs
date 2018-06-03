@@ -1,31 +1,24 @@
 ﻿using System.Collections.Generic;
 using System.Security.Claims;
+using System.Text;
 using System.Threading.Tasks;
-using Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using PersonalPhotos.Interfaces;
-using PersonalPhotos.Models;
 using PersonalPhotos.ViewModels;
 
 namespace PersonalPhotos.Controllers
 {
     public class LoginsController : Controller
     {
-        private readonly IHttpContextAccessor _httpContextAccessor;
-        private readonly ILogins _loginService;
         private readonly UserManager<IdentityUser> _userManager;
         private readonly SignInManager<IdentityUser> _signInManager;
         private readonly RoleManager<IdentityRole> _roleInManager;
         private readonly IEmail _email;
-        public LoginsController(ILogins loginService, IHttpContextAccessor httpContextAccessor
-            , UserManager<IdentityUser> userManager, SignInManager<IdentityUser> signInManager
+        public LoginsController(UserManager<IdentityUser> userManager, SignInManager<IdentityUser> signInManager
             , RoleManager<IdentityRole> roleInManager, IEmail email)
         {
-            _loginService = loginService;
-            _httpContextAccessor = httpContextAccessor;
             _userManager = userManager;
             _signInManager = signInManager;
             _roleInManager = roleInManager;
@@ -57,6 +50,9 @@ namespace PersonalPhotos.Controllers
             var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, model.RememberMe, false);
             if (!result.Succeeded)
             {
+                if (result == Microsoft.AspNetCore.Identity.SignInResult.TwoFactorRequired) {
+                    return RedirectToAction("MfaLogin");
+                }
                 ModelState.AddModelError(string.Empty, "Username and/or Password are incorrect.");
                 return View();
             }
@@ -118,7 +114,7 @@ namespace PersonalPhotos.Controllers
             var token = _userManager.GenerateEmailConfirmationTokenAsync(user);
             string scheme = Url.ActionContext.HttpContext.Request.Scheme;
             var url = Url.Action("Confirmation", "Logins", new { id = user.Id, token = token.Result }, scheme);
-            var emailBody = $"Please, confirm your email clicking on the link below<br>{url}";
+            var emailBody = $"Please, confirm your email by clicking on the link below<br>{url}";
             var subject = "Please, confirm your email address!";
             await _email.Send(model.Email, emailBody, subject);
             return RedirectToAction("Index");
@@ -137,6 +133,10 @@ namespace PersonalPhotos.Controllers
             var confirm = await _userManager.ConfirmEmailAsync(user, token);
             if (confirm.Succeeded)
             {
+                var is2FaEnabled = await _userManager.GetTwoFactorEnabledAsync(user);
+                if (!is2FaEnabled) {
+                    return RedirectToAction("Setup2Fa");
+                }
                 return RedirectToAction("Index");
             }
             ViewBag["Error"] = "Error with validating the emails address";
@@ -164,11 +164,11 @@ namespace PersonalPhotos.Controllers
             }
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
             string scheme = Url.ActionContext.HttpContext.Request.Scheme;
-            var url = Url.Action("ChangePassword", "Logins", new { userId = user.Id, token = token }, scheme);
+            var url = Url.Action("ChangePassword", "Logins", new { userId = user.Id, token }, scheme);
             var emailBody = $"Please, click on the link below to change your new password<br>{url}";
-            var subject = "Please, confirm your new password!";
+            const string subject = "Please, confirm your new password!";
             await _email.Send(model.EmailAddress, emailBody, subject);
-            return View();
+            return RedirectToAction("Index");
         }
 
         public async Task<IActionResult> ChangePassword(string userId, string token)
@@ -206,6 +206,88 @@ namespace PersonalPhotos.Controllers
             {
                 ModelState.AddModelError(string.Empty, "The new Password has not been able to be changed. Please retry in a few minutes.");
                 return View();
+            }
+            return RedirectToAction("Index");
+        }
+
+        [Authorize]
+        public async Task<IActionResult> Setup2Fa()
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user != null)
+            {
+                var authKey = await _userManager.GetAuthenticatorKeyAsync(user);
+                if (string.IsNullOrEmpty(authKey))
+                {
+                    await _userManager.ResetAuthenticatorKeyAsync(user);
+                    authKey = await _userManager.GetAuthenticatorKeyAsync(user);
+                }
+                var model = new MfaCreateViewModel
+                {
+                    AuthKey = authKey,
+                    FormattedAuthKey = FormatAuthKey(authKey)
+                };
+                return View(model);
+            }
+            return View();
+        }
+
+        private static string FormatAuthKey(string authKey)
+        {
+            const int chunkLength = 5;
+            var newAuthKey = new StringBuilder();
+            while (authKey.Length > 0)
+            {
+                var length = chunkLength > authKey.Length ? authKey.Length : chunkLength;
+                newAuthKey.Append(authKey.Substring(0, length) + " ");
+                authKey = authKey.Remove(0, length);
+            }
+            return newAuthKey.ToString();
+        }
+
+        [HttpPost]
+        [Authorize]
+        public async Task<IActionResult> Setup2Fa(MfaCreateViewModel model)
+        {
+            if (!ModelState.IsValid)
+            {
+                ModelState.AddModelError("", "Errors in Page!");
+                return View(model);
+            }
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null || !user.EmailConfirmed)
+            {
+                ModelState.AddModelError(string.Empty, "User not found or User is not confirm.");
+                return View(model);
+            }
+            var isCodeCorrect = await _userManager.VerifyTwoFactorTokenAsync(user, 
+                _userManager.Options.Tokens.AuthenticatorTokenProvider , model.Code);
+            if (!isCodeCorrect) {
+                ModelState.AddModelError(string.Empty, "The code did not match they auth key! Please, try it again");
+                return View(model);               
+            }
+            await _userManager.SetTwoFactorEnabledAsync(user, true);
+            return RedirectToAction("Index");
+        }
+
+        public IActionResult MfaLogin()
+        {
+            return View();
+        }
+        [HttpPost]
+        public async Task<IActionResult> MfaLogin(MfaLoginViewModel model)
+        {
+            if (!ModelState.IsValid)
+            {
+                ModelState.AddModelError("", "Errors in Page!");
+                return View(model);
+            }
+            var result = await _signInManager.TwoFactorSignInAsync(_userManager.Options.Tokens.AuthenticatorTokenProvider, 
+                model.Code, true, true);
+            if (!result.Succeeded)
+            {
+                ModelState.AddModelError(string.Empty, "Your code could not be validated. Try again.");
+                return View(model);
             }
             return RedirectToAction("Index");
         }
