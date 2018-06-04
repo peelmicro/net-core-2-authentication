@@ -105,6 +105,11 @@ namespace PersonalPhotos
               {
                   options.AppId = Configuration.GetSection("Facebook").GetValue<string>("AppId");
                   options.AppSecret = Configuration.GetSection("Facebook").GetValue<string>("AppSecret");
+              })
+              .AddGoogle(options =>
+              {
+                  options.ClientId = Configuration.GetSection("Google").GetValue<string>("ClientId");
+                  options.ClientSecret = Configuration.GetSection("Google").GetValue<string>("ClientSecret");
               });
         }
 
