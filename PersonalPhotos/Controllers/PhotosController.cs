@@ -8,6 +8,7 @@ using PersonalPhotos.ViewModels;
 
 namespace PersonalPhotos.Controllers
 {
+    [AutoValidateAntiforgeryToken]
     public class PhotosController : Controller
     {
         private readonly IFileStorage _fileStorage;
